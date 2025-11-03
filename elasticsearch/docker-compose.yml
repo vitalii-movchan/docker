@@ -1,0 +1,50 @@
+version: "3.0"
+
+networks:
+  es-net:
+    driver: bridge
+
+volumes:
+  elasticsearch-data:
+    driver: local
+  kibana-data:
+    driver: local
+
+services:
+  elasticsearch:
+    container_name: elasticsearch
+    image: elasticsearch:8.7.0
+    # For Elasticsearch versions prior to 6.4.0
+    # a full list of images, tags, and documentation can be found at docker.elastic.co.
+    restart: on-failure
+    volumes:
+      - elasticsearch-data:/home/vitaliy/docker/elasticsearch/data
+    environment:
+      - xpack.security.enabled=false
+      - discovery.type=single-node
+    networks:
+      - es-net
+    expose:
+      - 9200
+    ports:
+      - 9200:9200
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+  kibana:
+    container_name: kibana
+    image: kibana:8.7.0
+    # For Kibana versions prior to 6.4.0
+    # a full list of images, tags, and documentation can be found at docker.elastic.co.
+    restart: on-failure
+    volumes:
+      - kibana-data:/home/vitaliy/docker/kibana/data
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - es-net
+    ports:
+      - 5601:5601
+    depends_on:
+      - elasticsearch

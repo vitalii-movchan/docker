@@ -1,0 +1,25 @@
+version: "3.0"
+
+networks:
+  rabbit-net:
+    driver: bridge
+
+volumes:
+  elasticsearch-data:
+    driver: local
+  kibana-data:
+    driver: local
+
+services:
+  rabbit-server:
+    image: "rabbitmq:3-management"
+    hostname: localhost
+    environment:
+      #RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
+      RABBITMQ_DEFAULT_USER : guest
+      RABBITMQ_DEFAULT_PASS : guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - rabbit-net
