@@ -1,0 +1,95 @@
+# docker compose -f docker-compose.local.yml build
+# docker compose -f docker-compose.local.yml up
+# docker compose -f docker-compose.local.yml down
+version: '3.3'
+
+volumes:
+  centrobill_localstack_data:
+    driver: local
+
+networks:
+  centrobill-network:
+    driver: bridge
+
+services:
+  centrobill-ledger-reconciliation-application:
+    build:
+      context: .
+      dockerfile: docker/php-cli/Dockerfile
+      ssh:
+        - default    # Forward the default SSH agent
+      args:
+        USER_ID: "${USER_ID:-1000}"
+        USER_NAME: "${USER_NAME:-centrobill}"
+        GROUP_ID: "${GROUP_ID:-1000}"
+        GROUP_NAME: "${GROUP_NAME:-centrobill}"
+        XDEBUG_VERSION: "${XDEBUG_VERSION:-3.5.0}"
+        XDEBUG_CLIENT_PORT: "${XDEBUG_CLIENT_PORT:-9001}"
+        XDEBUG_IDE_KEY: "${XDEBUG_IDE_KEY:-PHPSTORM}"
+    container_name: centrobill-ledger-reconciliation-application
+    environment:
+      SSH_AUTH_SOCK: "${SSH_AUTH_SOCK}"
+    volumes:
+      - ./:/var/www/ledger-reconciliation
+      # Mount the socket file from the host into the container
+      # ssh-add -l
+      # ssh-add <path>
+      # printenv SSH_AUTH_SOCK
+      - ${SSH_HOST:-~/.ssh}:${SSH_DOCKER:-/home/centrobill/.ssh}:ro
+      - ${SSH_AUTH_SOCK}:${SSH_AUTH_SOCK}
+    networks:
+      - centrobill-network
+    restart: on-failure
+    tty: true
+    depends_on:
+      - centrobill-ledger-reconciliation-infrastructure
+    extra_hosts:
+      - host.docker.internal:host-gateway
+  centrobill-ledger-reconciliation-analytics:
+    # http://localhost:3000/
+    build:
+      context: .
+      dockerfile: docker/grafana/Dockerfile
+    container_name: centrobill-ledger-reconciliation-analytics
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "${GF_AUTH_ANONYMOUS_ENABLED:-true}"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "${GF_AUTH_ANONYMOUS_ORG_ROLE:-Admin}"
+      GF_AUTH_DISABLE_LOGIN_FORM: "${GF_AUTH_DISABLE_LOGIN_FORM:-true}"
+      GF_USERS_DEFAULT_THEME: "${GF_USERS_DEFAULT_THEME:-light}"
+    ports:
+      - ${GF_PORT:-3000}:3000
+    networks:
+      - centrobill-network
+    restart: on-failure
+    tty: true
+    depends_on:
+      - centrobill-ledger-reconciliation-infrastructure
+  centrobill-ledger-reconciliation-infrastructure:
+    # http://localhost:8080/#!/infraReady (not support)
+    # Only Pro version!!!
+    build:
+      context: .
+      dockerfile: docker/localstack/Dockerfile
+    container_name: centrobill-ledger-reconciliation-infrastructure
+    environment:
+      # LocalStack configuration: https://docs.localstack.cloud/references/configuration/
+      SERVICES: cloudwatch,opensearch,sqs # Specify the service
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-local}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-local}"
+      DEFAULT_REGION: "${DEFAULT_REGION:-us-east-1}"
+      PERSISTENCE: "${PERSISTENCE:-1}"
+      DEBUG: "${DEBUG:-1}"
+    volumes:
+      # Mount the Docker socket for Lambda function execution
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount a volume for persistence (optional)
+      - centrobill_localstack_data:/var/lib/localstack
+    networks:
+      - centrobill-network
+    ports:
+      # LocalStack Gateway
+      - ${LOCALSTACK_PORT_GATEWAY:-4566}:4566
+      # External services port range
+      - 4510-4559:4510-4559
+    restart: on-failure
+    tty: true
