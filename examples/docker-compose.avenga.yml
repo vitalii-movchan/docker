@@ -1,0 +1,97 @@
+version: '3.3'
+
+volumes:
+  genie_health_mysql_data:
+    driver: local
+
+networks:
+  genie_health_network:
+    driver: bridge
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    container_name: genie_health_nginx
+    volumes:
+      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
+      - ./orion:/var/www/orion
+    networks:
+      - genie_health_network
+    ports:
+      - ${DOCKER_APP_PORT:-80}:80
+    restart: on-failure
+    tty: true
+    depends_on:
+      - api
+      - console
+  api:
+    build:
+      context: .
+      dockerfile: docker/php-fpm/Dockerfile
+      args:
+        USER_ID: ${DOCKER_USER_ID:-1000}
+        USER_NAME: ${DOCKER_USER_NAME:-root}
+        GROUP_ID: ${DOCKER_GROUP_ID:-1000}
+        GROUP_NAME: ${DOCKER_GROUP_NAME:-root}
+        XDEBUG_VERSION: ${XDEBUG_VERSION:-3.1.6}
+        XDEBUG_CLIENT_PORT: ${XDEBUG_CLIENT_PORT:-9001}
+        XDEBUG_IDE_KEY: ${XDEBUG_IDE_KEY:-PHPSTORM}
+    container_name: genie_health_php_fpm
+    volumes:
+      - ./orion:/var/www/orion
+      - ./ptgconfig:/var/www/ptgconfig
+    networks:
+      - genie_health_network
+    restart: on-failure
+    tty: true
+    depends_on:
+      - db
+    extra_hosts:
+      - host.docker.internal:host-gateway
+  console:
+    build:
+      context: .
+      dockerfile: docker/php-cli/Dockerfile
+      args:
+        USER_ID: ${DOCKER_USER_ID:-1000}
+        USER_NAME: ${DOCKER_USER_NAME:-root}
+        GROUP_ID: ${DOCKER_GROUP_ID:-1000}
+        GROUP_NAME: ${DOCKER_GROUP_NAME:-root}
+        XDEBUG_VERSION: ${XDEBUG_VERSION:-3.1.6}
+        XDEBUG_CLIENT_PORT: ${XDEBUG_CLIENT_PORT:-9001}
+        XDEBUG_IDE_KEY: ${XDEBUG_IDE_KEY:-PHPSTORM}
+    container_name: genie_health_php_cli
+    volumes:
+      - ./orion:/var/www/orion
+      - ./ptgconfig:/var/www/ptgconfig
+    networks:
+      - genie_health_network
+    restart: on-failure
+    tty: true
+    depends_on:
+      - db
+    extra_hosts:
+      - host.docker.internal:host-gateway
+  db:
+    build:
+      context: .
+      dockerfile: docker/mysql/Dockerfile
+    container_name: genie_health_mysql
+    volumes:
+      - ./docker/mysql/scripts:/docker-entrypoint-initdb.d
+      - genie_health_mysql_data:/var/lib/mysql
+    command:
+      --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_DATABASE: ${DOCKER_MYSQL_DATABASE:-laravel}
+      MYSQL_USER: ${DOCKER_MYSQL_USER:-laravel}
+      MYSQL_PASSWORD: ${DOCKER_MYSQL_PASSWORD:-secret}
+      MYSQL_ROOT_PASSWORD: ${DOCKER_MYSQL_ROOT_PASSWORD:-secret}
+    networks:
+      - genie_health_network
+    ports:
+      - ${DOCKER_DB_PORT:-3306}:3306
+    restart: on-failure
+    tty: true
