@@ -21,8 +21,6 @@ scfi-kafka:
     volumes:
         - kafka:/bitnami/kafka
 
-
-
 # Wiki
 
 # https://www.jetbrains.com/help/idea/2023.2/big-data-tools-kafka.html#consume-messages
